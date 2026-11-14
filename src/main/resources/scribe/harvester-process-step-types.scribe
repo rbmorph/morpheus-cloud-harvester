@@ -1,0 +1,23 @@
+resource "process-step-type" "Provision Storage" {
+  name = "Creating Volumes"
+  code = "harvester.provision-storage"
+  description = "Create and configure storage volumes for the Harvester VM."
+}
+
+resource "process-step-type" "Provision Deploy" {
+  name = "Deploy Virtual Machine"
+  code = "harvester.provision-deploy"
+  description = "Deploy the VM to the target environment."
+}
+
+resource "process-step-type" "Wait Boot" {
+  name = "Wait for VM Boot"
+  code = "harvester.wait-for-vm-boot"
+  description = "Wait for VM to boot up."
+}
+
+resource "process-step-type" "Provision Network" {
+  name = "Wait for Network"
+  code = "harvester.provision-network"
+  description = "Wait for network or server status after VM launch."
+}

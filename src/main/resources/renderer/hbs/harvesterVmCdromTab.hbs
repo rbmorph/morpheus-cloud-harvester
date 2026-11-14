@@ -1,0 +1,193 @@
+<div class="harvester-vm-cdrom" id="hvc-{{serverId}}" data-server-id="{{serverId}}" data-list-route="{{listRoute}}" data-isos-route="{{isosRoute}}" data-attach-route="{{attachRoute}}" data-eject-route="{{ejectRoute}}" data-restart-route="{{restartRoute}}" style="padding: 10px 0;">
+  <div style="display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-bottom: 8px;">
+    <strong class="hvc-title">CD-ROM drives</strong>
+    <span class="hvc-status" style="opacity: 0.7;"></span>
+    <span style="margin-left: auto;">
+      <button type="button" class="btn btn-default btn-sm hvc-open" disabled>Attach ISO</button>
+      <button type="button" class="btn btn-default btn-sm hvc-restart" style="display: none;">Restart VM now</button>
+    </span>
+  </div>
+  <div class="hvc-message" style="display: none; margin-bottom: 8px;"></div>
+  <div class="hvc-attach" style="display: none; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px;">
+    <select class="form-control hvc-iso" style="width: auto; min-width: 280px;"></select>
+    <label style="font-weight: normal; margin: 0;"><input type="checkbox" class="hvc-boot"> Boot from it first</label>
+    <button type="button" class="btn btn-primary btn-sm hvc-attach-go">Attach</button>
+    <button type="button" class="btn btn-default btn-sm hvc-attach-cancel">Cancel</button>
+  </div>
+  <div class="hvc-list" style="opacity: 0.7;">Loading the VM's CD-ROM drives from Harvester...</div>
+  <div style="opacity: 0.7; font-size: 12px; margin-top: 8px;">
+    Only ISO images are offered. Harvester applies CD-ROM changes when the VM restarts.
+  </div>
+</div>
+<script nonce="{{nonce}}">
+(function () {
+  var root = document.getElementById('hvc-{{serverId}}');
+  if (!root || root.getAttribute('data-ready')) { return; }
+  root.setAttribute('data-ready', '1');
+  var serverId = root.getAttribute('data-server-id');
+  var q = function (sel) { return root.querySelector(sel); };
+  var msg = q('.hvc-message'), list = q('.hvc-list'), statusText = q('.hvc-status');
+  var openBtn = q('.hvc-open'), restartBtn = q('.hvc-restart');
+  var attachBox = q('.hvc-attach'), isoSelect = q('.hvc-iso'), bootBox = q('.hvc-boot');
+
+  function show(el, on) { if (el) { el.style.display = on ? '' : 'none'; } }
+  function message(text, kind) {
+    msg.className = 'hvc-message alert alert-' + (kind || 'info');
+    msg.style.margin = '0 0 8px 0';
+    msg.textContent = text;
+    show(msg, !!text);
+  }
+  function csrfHeaders() {
+    var h = {};
+    var token = document.querySelector('meta[name="_csrf"], meta[name="csrf-token"]');
+    var header = document.querySelector('meta[name="_csrf_header"]');
+    if (token) { h[header ? header.getAttribute('content') : 'X-CSRF-TOKEN'] = token.getAttribute('content'); }
+    h['X-Requested-With'] = 'XMLHttpRequest';
+    return h;
+  }
+  // Plugin routes are served at their own path; fall back to /plugin when Morpheus refuses or doesn't know it
+  function call(method, route, params) {
+    var query = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    var tried = [];
+    var isJson = function (r) { return (r.headers.get('content-type') || '').indexOf('json') >= 0; };
+    var attempt = function (prefix) {
+      var url = prefix + route + (method === 'GET' ? '?' + query : '');
+      var headers = csrfHeaders();
+      headers['Accept'] = 'application/json';
+      var opts = { method: method, credentials: 'same-origin', headers: headers };
+      if (method !== 'GET') {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+        opts.body = query;
+      }
+      return fetch(url, opts).then(function (r) {
+        tried.push(url.split('?')[0] + ' -> HTTP ' + r.status);
+        return r;
+      });
+    };
+    var usable = function (r) { return r.ok && isJson(r); };
+    return attempt('').then(function (r) {
+      return usable(r) ? r : attempt('/plugin').then(function (r2) { return usable(r2) ? r2 : r; });
+    }).then(function (r) {
+      if (!usable(r)) {
+        var hint = (r.status === 401 || r.status === 403)
+          ? "Morpheus refused the request (HTTP " + r.status + "): your role needs 'Harvester: Manage CD-ROM' at Full."
+          : 'The plugin endpoint was not found.';
+        throw new Error(hint + ' Tried: ' + tried.join('; '));
+      }
+      return r.json();
+    }).then(function (json) {
+      return (json && json.data && typeof json.data === 'object' && 'success' in json.data) ? json.data : json;
+    });
+  }
+  function cell(row, text) {
+    var td = document.createElement('td');
+    td.textContent = text == null ? '' : text;
+    row.appendChild(td);
+    return td;
+  }
+  function renderDrives(res) {
+    statusText.textContent = (res.namespace || '') + ' / ' + (res.vmName || '') + (res.status ? ' · ' + res.status : '');
+    list.innerHTML = '';
+    list.style.opacity = '';
+    var drives = res.cdroms || [];
+    if (!drives.length) {
+      list.textContent = 'This VM has no CD-ROM drives.';
+      list.style.opacity = '0.7';
+      return;
+    }
+    var table = document.createElement('table');
+    table.className = 'table';
+    table.style.width = 'auto';
+    var head = table.createTHead().insertRow();
+    ['Drive', 'Bus', 'Boot order', 'Volume', ''].forEach(function (h) {
+      var th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+    });
+    var body = table.createTBody();
+    drives.forEach(function (d) {
+      var row = body.insertRow();
+      cell(row, d.name); cell(row, d.bus); cell(row, d.bootOrder); cell(row, d.claimName);
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-default btn-xs';
+      button.textContent = 'Eject';
+      button.addEventListener('click', function () { eject(d.name, button); });
+      cell(row, '').appendChild(button);
+    });
+    list.appendChild(table);
+  }
+  function load() {
+    return call('GET', root.getAttribute('data-list-route'), { serverId: serverId }).then(function (res) {
+      if (!res || !res.success) { throw new Error((res && res.msg) || 'Could not load the CD-ROM drives.'); }
+      renderDrives(res);
+      openBtn.disabled = false;
+    }).catch(function (e) {
+      list.textContent = '';
+      message(e.message, 'danger');
+    });
+  }
+  function done(res) {
+    if (!res || !res.success) { throw new Error((res && res.msg) || 'The request failed.'); }
+    message(res.msg || 'Done.', 'success');
+    if (res.restartRequired) { show(restartBtn, true); }
+    return load();
+  }
+  function fail(e) { message(e.message, 'danger'); }
+  function eject(disk, button) {
+    button.disabled = true;
+    message('Ejecting ' + disk + '...', 'info');
+    call('POST', root.getAttribute('data-eject-route'), { serverId: serverId, disk: disk })
+      .then(done)
+      .catch(function (e) { fail(e); button.disabled = false; });
+  }
+
+  openBtn.addEventListener('click', function () {
+    message('Loading ISO images...', 'info');
+    call('GET', root.getAttribute('data-isos-route'), { serverId: serverId }).then(function (res) {
+      if (!res || !res.success) { throw new Error((res && res.msg) || 'Could not load the ISO images.'); }
+      if (!res.isos || !res.isos.length) {
+        throw new Error('This cloud has no ISO images. Upload one in Harvester (Images), then refresh the cloud.');
+      }
+      isoSelect.innerHTML = '';
+      res.isos.forEach(function (iso) {
+        var option = document.createElement('option');
+        option.value = iso.id;
+        option.textContent = iso.name;
+        isoSelect.appendChild(option);
+      });
+      attachBox.style.display = 'flex';
+      message('', 'info');
+    }).catch(fail);
+  });
+
+  q('.hvc-attach-cancel').addEventListener('click', function () { attachBox.style.display = 'none'; });
+
+  q('.hvc-attach-go').addEventListener('click', function () {
+    var button = this;
+    button.disabled = true;
+    message('Attaching the ISO...', 'info');
+    call('POST', root.getAttribute('data-attach-route'),
+        { serverId: serverId, imageId: isoSelect.value, bootFirst: bootBox.checked ? 'true' : 'false' })
+      .then(function (res) { attachBox.style.display = 'none'; return done(res); })
+      .catch(fail)
+      .then(function () { button.disabled = false; });
+  });
+
+  restartBtn.addEventListener('click', function () {
+    restartBtn.disabled = true;
+    message('Restarting the VM...', 'info');
+    call('POST', root.getAttribute('data-restart-route'), { serverId: serverId })
+      .then(function (res) {
+        if (!res || !res.success) { throw new Error((res && res.msg) || 'Restart failed.'); }
+        message(res.msg || 'VM restarting.', 'success');
+        show(restartBtn, false);
+        return load();
+      })
+      .catch(fail)
+      .then(function () { restartBtn.disabled = false; });
+  });
+
+  load();
+})();
+</script>

@@ -1,0 +1,44 @@
+resource "storage-controller-type" "harvester-ide" {
+  code: "harvester-ide"
+  name: "Harvester IDE"
+  description: "Harvester IDE"
+  category: "ide"
+  enabled: true
+  displayOrder: 1
+  creatable: false
+  maxDevices: 2
+}
+
+resource "storage-controller-type" "harvester-sata" {
+  code: "harvester-sata"
+  name: "Harvester SATA"
+  description: "Harvester SATA"
+  category: "sata"
+  enabled: true
+  displayOrder: 2
+  creatable: false
+  maxDevices: 6
+}
+
+
+resource "storage-controller-type" "harvester-virtio" {
+  code: "harvester-virtio"
+  name: "Harvester VirtIO"
+  description: "Harvester VirtIO"
+  category: "virtio"
+  enabled: true
+  displayOrder: 3
+  creatable: true
+  maxDevices: 24
+}
+
+resource "storage-controller-type" "harvester-scsi" {
+  code: "harvester-scsi"
+  name: "Harvester SCSI"
+  description: "Harvester SCSI"
+  category: "scsi"
+  enabled: true
+  displayOrder: 4
+  creatable: true
+  maxDevices: 256
+}

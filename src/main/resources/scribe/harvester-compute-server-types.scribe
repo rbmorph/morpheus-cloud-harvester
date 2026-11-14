@@ -1,0 +1,292 @@
+resource "option-type" "provisionType.harvester.resourcePool" {
+  category         = "provisionType.harvester"
+  code             = "provisionType.harvester.resourcePool"
+  displayOrder     = 1
+  fieldCode        = "gomorpheus.optiontype.ResourcePool"
+  fieldContext     = "config"
+  fieldGroup       = "Options"
+  fieldLabel       = "Resource Pool"
+  fieldName        = "harvesterResourcePoolId"
+  name             = "resource pool"
+  type             = "select"
+  required         = true
+  enabled          = true
+  optionSource     = "zonePools"
+  editable         = false
+  global           = false
+  placeHolder      = null
+  helpBlock        = ""
+  defaultValue     = null
+  custom           = false
+  fieldClass       = null
+  noBlank          = true
+  contextualDefault = true
+}
+
+resource "provision-type" "harvester" {
+    code                  = "harvester-provision-provider-plugin"
+    name                  = "Harvester"
+    isPlugin              = true
+    serverType            = "vm"
+    managed               = true
+    hostType              = "vm"
+    nodeFormat            = "vm"
+    cloneable             = false
+    enabled               = true
+    hasVolumes            = true
+    addVolumes            = true
+    hasDatastore          = true
+    provisionService      = "cloudPluginProvisioningService"
+    deployTargetService   = "vmDeployTargetService"
+    minDisk               = 0
+    customizeVolume       = true
+    rootDiskCustomizable  = true
+    rootDiskSizeKnown     = true
+    rootDiskResizable     = true
+    hasResourcePools      = true
+    requiresResourcePool  = true
+    hasZonePools          = true
+    zonePoolRequired      = true
+    hasNetworks           = true
+    networksScopedToPools = true
+    supportsAutoDatastore = true
+    hasSnapshots          = true
+    // Cores per socket is chosen with the core count; Harvester gets cores (per socket) and sockets
+    hasConfigurableCpuSockets = true
+    // The namespace is the selected resource pool, so there is no separate project field
+    optionTypes = [
+        { code = "provisionType.harvester.image" },
+        { code = "provisionType.harvester.skipNetworkWait" },
+        { code = "provisionType.harvester.cpuMemoryHotAdd" }
+    ]
+    virtualImageTypes = [
+        { code = "raw" },
+        { code = "qcow2" },
+        { code = "iso" }
+    ]
+    rootStorageTypes = [
+        { code = "harvesterPVC" }
+    ]
+    storageTypes = [
+        { code = "harvesterPVC" }
+    ]
+    controllerTypes = [
+        { code = "harvester-virtio" },
+        { code = "harvester-scsi" }
+    ]
+
+}
+
+resource "compute-type" "harvesterVM" {
+    code              = "harvester-vm"
+    name              = "Harvester VM"
+    hostType          = "harvesterVM"
+    isPlugin          = true
+    isEmbedded        = false
+}
+
+resource "compute-server-type" "harvesterUnmanaged" {
+    code                = "harvesterUnmanaged"
+    name                = "Harvester Instance"
+    description         = "harvester vm"
+    platform            = "linux"
+    nodeType            = "unmanaged"
+    isPlugin            = true
+    enabled             = true
+    selectable          = false
+    externalDelete      = false
+    managed             = false
+    supportsConsoleKeymap = true
+    controlPower        = true
+    controlSuspend      = false
+    creatable           = false
+    computeService      = "cloudPluginComputeService"
+    deleteQueue         = "computeHarvesterDeleteServerQueue"
+    initializeQueue     = "computeHarvesterInitializeServerQueue"
+    displayOrder        = 99
+    hasAutomation       = false
+    hasAgent            = true
+    containerHypervisor = false
+    bareMetalHost       = false
+    vmHypervisor        = false
+    agentType           = "vm"
+    managedServerType   = "harvester-linux"
+    guestVm             = true
+    provisionType = {
+        code = "harvester-provision-provider-plugin"
+    }
+    computeType = {
+            code = "harvester-vm"
+    }
+    optionTypes = [
+        { code = "computeServerType.global.sshHost" },
+        { code = "computeServerType.global.sshPort" },
+        { code = "computeServerType.global.sshUsername" },
+        { code = "computeServerType.global.sshPassword" }
+    ]
+}
+
+
+resource "compute-type" "harvesterMaster" {
+    code              = "harvester-master"
+    name              = "Harvester Master"
+    hostType          = "harvesterMaster"
+    isPlugin          = true
+    isEmbedded        = false
+}
+
+resource "compute-type" "harvesterWorker" {
+    code              = "harvester-worker"
+    name              = "Harvester Worker"
+    hostType          = "harvesterWorker"
+    isPlugin          = true
+    isEmbedded        = false
+}
+
+resource "compute-server-type" "harvesterMaster" {
+    // Harvester hosts are VM hypervisors: not managed, no agent, no Kubernetes view
+    code                = "harvesterMaster"
+    isPlugin            = true
+    name                = "Harvester Master"
+    description         = "Harvester hypervisor host"
+    platform            = "linux"
+    nodeType            = "harvester-master"
+    hasMaintenanceMode  = false
+    reconfigureSupported = false
+    enabled             = true
+    selectable          = false
+    externalDelete      = false
+    managed             = false
+    controlPower        = false
+    controlSuspend      = false
+    creatable           = false
+    computeService      = "cloudPluginComputeService"
+    displayOrder        = 10
+    hasAutomation       = false
+    hasAgent            = false
+    containerHypervisor = false
+    bareMetalHost       = false
+    vmHypervisor        = true
+    agentType           = "none"
+    provisionType = {
+        code = "harvester-provision-provider-plugin"
+    }
+    computeType = {
+        code = "harvester-master"
+    }
+    optionTypes = []
+}
+
+resource "compute-server-type" "harvesterWorker" {
+    // Harvester hosts are VM hypervisors: not managed, no agent, no Kubernetes view
+    code                = "harvesterWorker"
+    isPlugin            = true
+    name                = "Harvester Worker"
+    description         = "Harvester hypervisor host"
+    platform            = "linux"
+    nodeType            = "harvester-worker"
+    hasMaintenanceMode  = false
+    reconfigureSupported = false
+    enabled             = true
+    selectable          = false
+    externalDelete      = false
+    managed             = false
+    controlPower        = false
+    controlSuspend      = false
+    creatable           = false
+    computeService      = "cloudPluginComputeService"
+    displayOrder        = 10
+    hasAutomation       = false
+    hasAgent            = false
+    containerHypervisor = false
+    bareMetalHost       = false
+    vmHypervisor        = true
+    agentType           = "none"
+    provisionType = {
+        code = "harvester-provision-provider-plugin"
+    }
+    computeType = {
+        code = "harvester-worker"
+    }
+    optionTypes = []
+}
+
+resource "compute-server-type" "harvester-linux" {
+    code                = "harvester-linux"
+    name                = "Harvester Managed Linux VM"
+    description         = "harvester vm provisioned via morpheus"
+    platform            = "linux"
+    nodeType            = "morpheus-vm-node"
+    isPlugin            = true
+    enabled             = true
+    selectable          = false
+    externalDelete      = true
+    managed             = true
+    supportsConsoleKeymap = true
+    controlPower        = true
+    controlSuspend      = true
+    creatable           = true
+    computeService      = "cloudPluginComputeService"
+    deleteQueue         = "computeHarvesterDeleteServerQueue"
+    initializeQueue     = "computeHarvesterInitializeServerQueue"
+    displayOrder        = 0
+    hasAutomation       = true
+    hasAgent            = true
+    containerHypervisor = false
+    bareMetalHost       = false
+    vmHypervisor        = false
+    agentType           = "vm"
+    guestVm             = true
+    provisionType = {
+        code = "harvester-provision-provider-plugin"
+    }
+    computeType = {
+            code = "harvester-vm"
+    }
+    optionTypes = [
+        { code = "computeServerType.global.sshHost" },
+        { code = "computeServerType.global.sshPort" },
+        { code = "computeServerType.global.sshUsername" },
+        { code = "computeServerType.global.sshPassword" }
+    ]
+}
+
+resource "compute-server-type" "harvester-windows" {
+    code                = "harvester-windows"
+    name                = "Harvester Managed Windows VM"
+    description         = "harvester vm provisioned via morpheus"
+    platform            = "windows"
+    nodeType            = "morpheus-windows-vm-node"
+    isPlugin            = true
+    enabled             = true
+    selectable          = false
+    externalDelete      = true
+    managed             = true
+    supportsConsoleKeymap = true
+    controlPower        = true
+    controlSuspend      = true
+    creatable           = true
+    computeService      = "cloudPluginComputeService"
+    deleteQueue         = "computeHarvesterDeleteServerQueue"
+    initializeQueue     = "computeHarvesterInitializeServerQueue"
+    displayOrder        = 0
+    hasAutomation       = true
+    hasAgent            = true
+    containerHypervisor = false
+    bareMetalHost       = false
+    vmHypervisor        = false
+    agentType           = "vm"
+    guestVm             = true
+    provisionType = {
+        code = "harvester-provision-provider-plugin"
+    }
+    computeType = {
+            code = "harvester-vm"
+    }
+    optionTypes = [
+        { code = "computeServerType.global.sshHost" },
+        { code = "computeServerType.global.sshPort" },
+        { code = "computeServerType.global.sshUsername" },
+        { code = "computeServerType.global.sshPassword" }
+    ]
+}

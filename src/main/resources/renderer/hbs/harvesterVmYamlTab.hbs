@@ -1,0 +1,145 @@
+<div class="harvester-vm-yaml" id="hvy-{{serverId}}" data-server-id="{{serverId}}" data-source-route="{{sourceRoute}}" data-save-route="{{saveRoute}}" style="padding: 10px 0;">
+{{#if error}}
+  <div class="alert alert-warning" style="margin: 0;">{{error}}</div>
+{{else}}
+  <div style="display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 8px;">
+    <strong>{{namespace}} / {{vmName}}</strong>
+    {{#if printableStatus}}<span>Status: {{printableStatus}}</span>{{/if}}
+    <span style="opacity: 0.7;">Fetched from Harvester {{fetchedAt}}. Reload the page to refresh.</span>
+    {{#if harvesterUrl}}<a href="{{harvesterUrl}}" target="_blank" rel="noopener noreferrer">Open in Harvester</a>{{/if}}
+    <span style="margin-left: auto;">
+      <button type="button" class="btn btn-default btn-sm hvy-edit">Edit</button>
+      <button type="button" class="btn btn-primary btn-sm hvy-save" style="display: none;">Save</button>
+      <button type="button" class="btn btn-default btn-sm hvy-cancel" style="display: none;">Cancel</button>
+    </span>
+  </div>
+  <div class="hvy-message" style="display: none; margin-bottom: 8px;"></div>
+  <div class="hvy-note" style="opacity: 0.7; margin-bottom: 8px; font-size: 12px;">
+    Not shown: status, managedFields and the last-applied annotation{{#if hiddenSecrets}}, and inline cloud-init data (may contain passwords){{/if}}.
+  </div>
+  <div class="hvy-edit-note" style="display: none; opacity: 0.8; margin-bottom: 8px; font-size: 12px;">
+    Editing the full VM object (cloud-init data included). Save replaces the VM in Harvester after a dry run. Changes under
+    spec.template (CPU, memory, disks, networks, Instance Labels) take effect after the VM restarts. If someone changed the
+    VM since you clicked Edit, Harvester refuses the save: cancel and edit again.
+  </div>
+  <pre class="hvy-view" style="max-height: 70vh; overflow: auto; white-space: pre; font-family: Menlo, Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.45; padding: 12px; margin: 0; border-radius: 4px;">{{yaml}}</pre>
+  <textarea class="hvy-editor form-control" spellcheck="false" wrap="off" style="display: none; width: 100%; height: 70vh; font-family: Menlo, Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.45; white-space: pre; tab-size: 2;"></textarea>
+{{/if}}
+</div>
+<script nonce="{{nonce}}">
+(function () {
+  var root = document.getElementById('hvy-{{serverId}}');
+  if (!root || root.getAttribute('data-ready')) { return; }
+  root.setAttribute('data-ready', '1');
+  var serverId = root.getAttribute('data-server-id');
+  var sourceRoute = root.getAttribute('data-source-route');
+  var saveRoute = root.getAttribute('data-save-route');
+  var q = function (sel) { return root.querySelector(sel); };
+  var editBtn = q('.hvy-edit'), saveBtn = q('.hvy-save'), cancelBtn = q('.hvy-cancel');
+  var view = q('.hvy-view'), editor = q('.hvy-editor'), msg = q('.hvy-message');
+  var note = q('.hvy-note'), editNote = q('.hvy-edit-note');
+  if (!editBtn) { return; }
+
+  function show(el, on) { if (el) { el.style.display = on ? '' : 'none'; } }
+  function message(text, kind) {
+    msg.className = 'hvy-message alert alert-' + (kind || 'info');
+    msg.style.margin = '0 0 8px 0';
+    msg.textContent = text;
+    show(msg, !!text);
+  }
+  function setEditing(on) {
+    show(view, !on); show(note, !on); show(editor, on); show(editNote, on);
+    show(editBtn, !on); show(saveBtn, on); show(cancelBtn, on);
+  }
+  function csrfHeaders() {
+    var h = {};
+    var token = document.querySelector('meta[name="_csrf"], meta[name="csrf-token"]');
+    var header = document.querySelector('meta[name="_csrf_header"]');
+    if (token) { h[header ? header.getAttribute('content') : 'X-CSRF-TOKEN'] = token.getAttribute('content'); }
+    h['X-Requested-With'] = 'XMLHttpRequest';
+    return h;
+  }
+  // Plugin routes are served at their own path; some setups put them under /plugin. Try the bare path first and
+  // fall back to /plugin when Morpheus refuses or doesn't know the path.
+  function call(method, route, params) {
+    var query = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    var tried = [];
+    var isJson = function (r) { return (r.headers.get('content-type') || '').indexOf('json') >= 0; };
+    var attempt = function (prefix) {
+      var url = prefix + route + (method === 'GET' ? '?' + query : '');
+      var headers = csrfHeaders();
+      headers['Accept'] = 'application/json';
+      var opts = { method: method, credentials: 'same-origin', headers: headers };
+      if (method !== 'GET') {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+        opts.body = query;
+      }
+      return fetch(url, opts).then(function (r) {
+        tried.push(url.split('?')[0] + ' -> HTTP ' + r.status + (r.ok && !isJson(r) ? ' (not JSON)' : ''));
+        return r;
+      });
+    };
+    var usable = function (r) { return r.ok && isJson(r); };
+    return attempt('').then(function (r) {
+      return usable(r) ? r : attempt('/plugin').then(function (r2) { return usable(r2) ? r2 : r; });
+    }).then(function (r) {
+      if (!usable(r)) {
+        var hint = (r.status === 401 || r.status === 403)
+          ? 'Morpheus refused the request (HTTP ' + r.status + ').'
+          : 'The plugin endpoint was not found.';
+        if (r.status === 401 || r.status === 403) {
+          hint = 'Morpheus refused the request (HTTP ' + r.status + '): your role needs this permission at Full.';
+        }
+        throw new Error(hint + ' Tried: ' + tried.join('; '));
+      }
+      return r.json();
+    }).then(function (json) {
+      return (json && json.data && typeof json.data === 'object' && 'success' in json.data) ? json.data : json;
+    });
+  }
+
+  editBtn.addEventListener('click', function () {
+    editBtn.disabled = true;
+    message('Loading the VM from Harvester...', 'info');
+    call('GET', sourceRoute, { serverId: serverId }).then(function (res) {
+      if (!res || !res.success) { throw new Error((res && res.msg) || 'Could not load the YAML.'); }
+      editor.value = res.yaml;
+      message('', 'info');
+      setEditing(true);
+      editor.focus();
+    }).catch(function (e) {
+      message(e.message, 'danger');
+    }).then(function () { editBtn.disabled = false; });
+  });
+
+  cancelBtn.addEventListener('click', function () {
+    setEditing(false);
+    message('', 'info');
+  });
+
+  // Tab inserts two spaces instead of leaving the editor
+  editor.addEventListener('keydown', function (e) {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      var s = editor.selectionStart, end = editor.selectionEnd;
+      editor.value = editor.value.substring(0, s) + '  ' + editor.value.substring(end);
+      editor.selectionStart = editor.selectionEnd = s + 2;
+    }
+  });
+
+  saveBtn.addEventListener('click', function () {
+    saveBtn.disabled = true; cancelBtn.disabled = true;
+    message('Saving to Harvester...', 'info');
+    call('POST', saveRoute, { serverId: serverId, yaml: editor.value }).then(function (res) {
+      if (!res || !res.success) { throw new Error((res && res.msg) || 'Save failed.'); }
+      message((res.msg || 'Saved.') + ' Reload the page to see the updated YAML.', 'success');
+      setEditing(false);
+      view.textContent = 'Saved. Reload the page to see the VM as Harvester has it now.';
+    }).catch(function (e) {
+      message(e.message, 'danger');
+    }).then(function () { saveBtn.disabled = false; cancelBtn.disabled = false; });
+  });
+})();
+</script>

@@ -1,0 +1,21 @@
+resource "network-type" "harvesterNetwork" {
+  code               = "harvesterNetwork"
+  name               = "Harvester Network"
+  description        = "Harvester Network"
+  externalType       = "Network"
+  category           = "harvester"
+  overlay            = false
+  creatable          = false
+  deletable          = false
+  enabled            = true
+  cidrRequired       = false
+  cidrEditable       = true
+  dhcpServerEditable = true
+  dnsEditable        = true
+  gatewayEditable    = true
+  vlanIdEditable     = false
+  canAssignPool      = true
+  hasNetworkServer   = false
+  hasCidr            = true
+  ipv6Editable       = true
+}

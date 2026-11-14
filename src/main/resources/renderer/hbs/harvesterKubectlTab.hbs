@@ -1,0 +1,117 @@
+<div class="harvester-kubectl" id="hkc-{{serverId}}" data-server-id="{{serverId}}" data-run-route="{{runRoute}}" style="padding: 10px 0;">
+  <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;">
+    <strong>Kubernetes console</strong>
+    <span style="opacity: 0.7; font-size: 12px;">built-in kubectl subset, run against the whole Harvester cluster this host belongs to. Type <code>help</code> for the commands.</span>
+    <span style="margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap;">
+      <button type="button" class="btn btn-default btn-xs hkc-example" data-cmd="get nodes -o wide">get nodes</button>
+      <button type="button" class="btn btn-default btn-xs hkc-example" data-cmd="get vm -A">get vm -A</button>
+      <button type="button" class="btn btn-default btn-xs hkc-example" data-cmd="get pods -n harvester-system">harvester pods</button>
+      <button type="button" class="btn btn-default btn-xs hkc-example" data-cmd="top nodes">top nodes</button>
+      <button type="button" class="btn btn-default btn-xs hkc-clear">Clear</button>
+    </span>
+  </div>
+  <pre class="hkc-output" style="background: #1e1e1e; color: #e6e6e6; font-family: Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 12px; line-height: 1.45; padding: 10px; min-height: 260px; max-height: 560px; overflow: auto; white-space: pre; border-radius: 4px; margin: 0;"></pre>
+  <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; background: #1e1e1e; border-radius: 4px; padding: 4px 10px;">
+    <span style="color: #4ec9b0; font-family: Menlo, Consolas, monospace; font-size: 12px;">kubectl</span>
+    <input type="text" class="hkc-command" autocomplete="off" spellcheck="false" placeholder="get pods -A"
+           style="flex: 1; background: transparent; border: 0; outline: none; color: #e6e6e6; font-family: Menlo, Consolas, monospace; font-size: 12px; padding: 4px 0;">
+    <button type="button" class="btn btn-primary btn-xs hkc-run">Run</button>
+  </div>
+  <div style="margin-top: 6px;">
+    <a href="#" class="hkc-toggle-input" style="font-size: 12px;">Manifest for <code>apply -f -</code> / <code>create -f -</code></a>
+    <textarea class="hkc-input form-control" rows="10" spellcheck="false" placeholder="Paste YAML or JSON. Separate several manifests with a line containing ---"
+              style="display: none; margin-top: 4px; font-family: Menlo, Consolas, monospace; font-size: 12px;"></textarea>
+  </div>
+</div>
+<script nonce="{{nonce}}">
+(function () {
+  var root = document.getElementById('hkc-{{serverId}}');
+  if (!root || root.getAttribute('data-ready')) { return; }
+  root.setAttribute('data-ready', '1');
+  var serverId = root.getAttribute('data-server-id');
+  var route = root.getAttribute('data-run-route');
+  var q = function (sel) { return root.querySelector(sel); };
+  var out = q('.hkc-output'), cmd = q('.hkc-command'), input = q('.hkc-input'), runBtn = q('.hkc-run');
+  var history = [], pos = 0, busy = false;
+  try { history = JSON.parse(window.localStorage.getItem('harvester-kubectl-history') || '[]'); } catch (e) { history = []; }
+  pos = history.length;
+
+  function append(text, color) {
+    var span = document.createElement('span');
+    if (color) { span.style.color = color; }
+    span.textContent = text + '\n';
+    out.appendChild(span);
+    out.scrollTop = out.scrollHeight;
+  }
+  function csrfHeaders() {
+    var h = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json',
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' };
+    var token = document.querySelector('meta[name="_csrf"], meta[name="csrf-token"]');
+    var header = document.querySelector('meta[name="_csrf_header"]');
+    if (token) { h[header ? header.getAttribute('content') : 'X-CSRF-TOKEN'] = token.getAttribute('content'); }
+    return h;
+  }
+  // Plugin routes are served at their own path; fall back to /plugin when Morpheus doesn't know it
+  function post(params) {
+    var body = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    var isJson = function (r) { return (r.headers.get('content-type') || '').indexOf('json') >= 0; };
+    var attempt = function (prefix) {
+      return fetch(prefix + route, { method: 'POST', credentials: 'same-origin', headers: csrfHeaders(), body: body });
+    };
+    return attempt('').then(function (r) {
+      return (r.ok && isJson(r)) ? r : attempt('/plugin').then(function (r2) { return (r2.ok && isJson(r2)) ? r2 : r; });
+    }).then(function (r) {
+      if (!(r.ok && isJson(r))) {
+        throw new Error((r.status === 401 || r.status === 403)
+          ? "Morpheus refused the request (HTTP " + r.status + "): your role needs a 'Harvester: Kubernetes Console' permission at Full, or your session has expired."
+          : 'The console endpoint was not found (HTTP ' + r.status + ').');
+      }
+      return r.json();
+    }).then(function (json) {
+      return (json && json.data && typeof json.data === 'object' && 'output' in json.data) ? json.data : json;
+    });
+  }
+  function run(text) {
+    var line = (text || '').trim();
+    if (!line || busy) { return; }
+    if (line === 'clear') { out.textContent = ''; cmd.value = ''; return; }
+    if (history[history.length - 1] !== line) { history.push(line); }
+    history = history.slice(-100);
+    pos = history.length;
+    try { window.localStorage.setItem('harvester-kubectl-history', JSON.stringify(history)); } catch (e) { /* ignore */ }
+    append('$ kubectl ' + line.replace(/^kubectl\s+/, ''), '#4ec9b0');
+    cmd.value = '';
+    busy = true;
+    runBtn.disabled = true;
+    var params = { serverId: serverId, command: line };
+    if (/(^|\s)(-f|--filename)(\s+|=)-(\s|$)/.test(line)) { params.input = input.value; }
+    post(params).then(function (res) {
+      append(res.output || (res.success ? '' : 'error'), res.success ? null : '#f48771');
+    }).catch(function (err) {
+      append(err.message, '#f48771');
+    }).then(function () {
+      busy = false;
+      runBtn.disabled = false;
+      cmd.focus();
+    });
+  }
+  cmd.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); run(cmd.value); }
+    else if (e.key === 'ArrowUp') { if (pos > 0) { pos--; cmd.value = history[pos]; } e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { if (pos < history.length - 1) { pos++; cmd.value = history[pos]; } else { pos = history.length; cmd.value = ''; } e.preventDefault(); }
+  });
+  runBtn.addEventListener('click', function () { run(cmd.value); });
+  q('.hkc-clear').addEventListener('click', function () { out.textContent = ''; cmd.focus(); });
+  q('.hkc-toggle-input').addEventListener('click', function (e) {
+    e.preventDefault();
+    input.style.display = input.style.display === 'none' ? '' : 'none';
+    if (input.style.display !== 'none') { input.focus(); }
+  });
+  Array.prototype.forEach.call(root.querySelectorAll('.hkc-example'), function (b) {
+    b.addEventListener('click', function () { run(b.getAttribute('data-cmd')); });
+  });
+  append('Harvester Kubernetes console. Type help for the supported commands.', '#9cdcfe');
+})();
+</script>

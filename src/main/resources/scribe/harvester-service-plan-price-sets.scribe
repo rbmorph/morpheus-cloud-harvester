@@ -1,0 +1,98 @@
+resource "service-plan-price-set" "harvester-vm-1cpu-1gb-default" {
+  servicePlan = {
+    code = "harvester-vm-1cpu-1gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-1cpu-2gb-default" {
+  servicePlan = {
+    code = "harvester-vm-1cpu-2gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-2cpu-2gb-default" {
+  servicePlan = {
+    code = "harvester-vm-2cpu-2gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-2cpu-4gb-default" {
+  servicePlan = {
+    code = "harvester-vm-2cpu-4gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-2cpu-8gb-default" {
+  servicePlan = {
+    code = "harvester-vm-2cpu-8gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-4cpu-8gb-default" {
+  servicePlan = {
+    code = "harvester-vm-4cpu-8gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-4cpu-16gb-default" {
+  servicePlan = {
+    code = "harvester-vm-4cpu-16gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-8cpu-16gb-default" {
+  servicePlan = {
+    code = "harvester-vm-8cpu-16gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-8cpu-32gb-default" {
+  servicePlan = {
+    code = "harvester-vm-8cpu-32gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-16cpu-32gb-default" {
+  servicePlan = {
+    code = "harvester-vm-16cpu-32gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}
+
+resource "service-plan-price-set" "harvester-vm-16cpu-64gb-default" {
+  servicePlan = {
+    code = "harvester-vm-16cpu-64gb"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}

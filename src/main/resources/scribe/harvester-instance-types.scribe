@@ -1,0 +1,185 @@
+resource "instance-type" "harvester" {
+  name                    = "Harvester"
+  code                    = "harvester"
+  description             = "Spin up any VM on your Harvester based infrastructure from instance type."
+  category                = "cloud"
+  active                  = true
+  enabled                 = true
+  hasConfig               = false
+  hasSettings             = false
+  hasDeployment           = false
+  hasAutoScale            = true
+  provisionTypeDefault    = true
+  pluginIconPath          = "harvester-logo.svg"
+  pluginIconHidpiPath     = "harvester-logo.svg"
+  pluginIconDarkPath      = "harvester-logo-dark.svg"
+  pluginIconDarkHidpiPath = "harvester-logo-dark.svg"
+  versions                = [
+    "1.0"
+  ]
+  environmentPrefix       = "HARVESTER"
+  stack-tier              = 40
+  // Morpheus's built-in "kvm" view set gives the provisioning and reconfigure dialogs their standard layout;
+  // Morpheus has no "harvester" view set
+  viewSet                 = "kvm"
+}
+
+resource "instance-type-layout" "harvester-1_0_single" {
+  code            = "harvester-1.0-single"
+  name            = "Harvester VM"
+  sortOrder       = 0
+  instanceVersion = "1.0"
+  description     = "This will provision a single vm"
+  instanceType    = instance-type.harvester
+  serverCount     = 1
+  portCount       = 0
+  enabled         = true
+  creatable       = true
+  supportsConvertToManaged = true
+  provisionType   = "harvester-provision-provider-plugin"
+  workloads = [
+    workload-type-set.harvester-1_0_set
+  ]
+}
+
+resource "workload-type" "harvester-1_0" {
+  code             = "harvester-1.0"
+  shortName        = "harvester"
+  name             = "Harvester VM"
+  ports            = []
+  containerVersion = "1.0"
+  repositoryImage  = ""
+  serverType       = "vm"
+  entryPoint       = ""
+  category         = "harvester"
+  statTypeCode     = "vm"
+  logTypeCode      = "harvester"
+  checkTypeCode    = "containerCheck"
+  mountPoint       = "/data"
+  provisionType    = "harvester-provision-provider-plugin"
+}
+
+resource "workload-type-set" "harvester-1_0_set" {
+  code           = "harvester-1.0-set"
+  workloadType   = workload-type.harvester-1_0
+  priorityOrder  = 0
+  dynamicCount   = true
+  containerCount = 1
+}
+
+resource "option-type" "provisionType.harvester.network" {
+  category         = "provisionType.harvester"
+  code             = "provisionType.harvester.network"
+  displayOrder     = 2
+  fieldCode        = "gomorpheus.optiontype.Network"
+  fieldContext     = "config"
+  fieldGroup       = "Options"
+  fieldLabel       = "Network"
+  fieldName        = "networkId"
+  name             = "network"
+  type             = "select"
+  required         = true
+  enabled          = true
+  optionSource     = "networks"
+  editable         = false
+  global           = false
+  placeHolder      = null
+  helpBlock        = ""
+  defaultValue     = null
+  custom           = false
+  fieldClass       = null
+}
+
+resource "option-type" "provisionType.harvester.skipNetworkWait" {
+  category         = "provisionType.harvester"
+  code             = "provisionType.harvester.skipNetworkWait"
+  displayOrder     = 10
+  fieldContext     = "config"
+  fieldGroup       = "Options"
+  fieldLabel       = "Skip Network Wait"
+  fieldName        = "skipNetworkWait"
+  name             = "Skip Network Wait"
+  type             = "checkbox"
+  defaultValue     = "off"
+  required         = false
+  helpBlock        = "Finish provisioning without waiting for the VM to report an IP address or the Morpheus agent. Use for ISO installs or VMs with no network configured."
+}
+
+resource "option-type" "provisionType.harvester.cpuMemoryHotAdd" {
+  category         = "provisionType.harvester"
+  code             = "provisionType.harvester.cpuMemoryHotAdd"
+  displayOrder     = 11
+  fieldContext     = "config"
+  fieldGroup       = "Options"
+  fieldLabel       = "CPU and Memory Hot Add"
+  fieldName        = "cpuMemoryHotAdd"
+  name             = "CPU and Memory Hot Add"
+  type             = "checkbox"
+  defaultValue     = "off"
+  required         = false
+  helpBlock        = "Allow CPUs (whole sockets) and memory to be added while the VM runs, up to Harvester's max-hotplug-ratio (default 4x the starting size). Needs Harvester 1.6+, a live-migratable VM and at least 1 GB of memory."
+}
+
+resource "option-type" "provisionType.harvester.image" {
+  category         = "provisionType.harvester"
+  code             = "provisionType.harvester.image"
+  displayOrder     = 3
+  fieldCode        = "gomorpheus.optiontype.Image"
+  fieldContext     = "config"
+  fieldGroup       = "Options"
+  fieldLabel       = "Image"
+  fieldName        = "template"
+  name             = "Image"
+  optionSourceType = "harvester"
+  optionSource     = "harvesterVirtualImages"
+  required         = true
+  type             = "typeahead"
+}
+
+resource "option-type" "provisionType.harvester.project" {
+  category         = "provisionType.harvester"
+  name             = "Project"
+  code             = "provisionType.harvester.project"
+  fieldName        = "project"
+  fieldContext     = "config"
+  fieldCode        = "gomorpheus.optiontype.Project"
+  fieldLabel       = "Project"
+  fieldGroup       = "Options"
+  type             = "typeahead"
+  displayOrder     = 4
+  required         = true
+  optionSource     = "harvesterProjects"
+  optionSourceType = "harvester"
+}
+
+resource "service-plan" "custom-harvester" {
+  code                = "custom-harvester"
+  editable            = true
+  name                = "Custom"
+  description         = "Custom CPU, memory and disks"
+  sortOrder           = 100
+  maxStorage          = 42949672960
+  maxMemory           = 4294967296
+  maxCpu              = 2
+  maxCores            = 2
+  coresPerSocket      = 1
+  provisionType = {
+    code = "harvester-provision-provider-plugin"
+  }
+  customMaxStorage    = true
+  customMaxDataStorage = true
+  // Every custom option on: CPU (sockets), cores (total vCPUs) and cores per socket, memory and disks
+  customCores = true
+  customMaxMemory = true
+  customCpu = true
+  addVolumes          = true
+}
+
+resource "service-plan-price-set" "custom-harvester-default" {
+  servicePlan = {
+    code = "custom-harvester"
+  }
+  priceSet = {
+    code = "default.priceset"
+  }
+}

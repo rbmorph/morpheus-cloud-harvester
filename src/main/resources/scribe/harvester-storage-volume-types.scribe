@@ -1,0 +1,56 @@
+resource "storage-volume-type" "harvesterPVC" {
+  code: "harvesterPVC"
+  name: "Harvester Volume"
+  description: "Harvester volume (Longhorn-backed Persistent Volume Claim)"
+  displayName: "Harvester Volume"
+  volumeType: "volume"
+  category: "harvester"
+  enabled: true
+  displayOrder: 0
+  customLabel: true
+  customSize: true
+  defaultType: true
+  autoDelete: true
+  minStorage: 0
+  hasDatastore: true
+  allowSearch: true
+  volumeCategory: "volume"
+}
+
+resource "storage-volume-type" "harvesterDataVolume" {
+  code: "harvesterDataVolume"
+  name: "Harvester DataVolume"
+  description: "Harvester Data Volume"
+  displayName: "Harvester DataVolume"
+  volumeType: "volume"
+  category: "harvester"
+  enabled: false
+  displayOrder: 1
+  customLabel: true
+  customSize: true
+  defaultType: false
+  autoDelete: true
+  minStorage: 0
+  hasDatastore: true
+  allowSearch: true
+  volumeCategory: "volume"
+}
+
+resource "storage-volume-type" "harvesterDataSource" {
+  code: "harvesterDataSource"
+  name: "Harvester DataSource"
+  description: "Harvester DataSource Volume"
+  displayName: "Harvester DataSource"
+  volumeType: "volume"
+  category: "harvester"
+  enabled: false
+  displayOrder: 2
+  customLabel: true
+  customSize: true
+  defaultType: false
+  autoDelete: true
+  minStorage: 0
+  hasDatastore: true
+  allowSearch: true
+  volumeCategory: "volume"
+}
